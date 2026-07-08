@@ -59,9 +59,15 @@ async function jikanFetch(path: string): Promise<any | null> {
 export const searchAnime = createServerFn({ method: "GET" })
   .inputValidator((input: { q: string }) => z.object({ q: z.string().trim().min(1).max(80) }).parse(input))
   .handler(async ({ data }) => {
-    const json = await jikanFetch(`/anime?q=${encodeURIComponent(data.q)}&limit=24&sfw=true&order_by=popularity`);
-    return { results: ((json?.data ?? []) as any[]).map(mapCard) as AnimeCard[], error: json ? null : "Search temporarily unavailable" };
+    const json = await jikanFetch(`/anime?q=${encodeURIComponent(data.q)}&limit=24&order_by=popularity`);
+    const seen = new Set<number>();
+    const results = ((json?.data ?? []) as any[])
+      .map(mapCard)
+      .filter((a) => (seen.has(a.id) ? false : (seen.add(a.id), true))) as AnimeCard[];
+    return { results, error: json ? null : "Search temporarily unavailable" };
   });
+
+
 
 export const topAnime = createServerFn({ method: "GET" }).handler(async () => {
   const json = await jikanFetch(`/top/anime?limit=12&filter=bypopularity`);
