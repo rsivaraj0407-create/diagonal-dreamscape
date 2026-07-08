@@ -38,27 +38,39 @@ function mapCard(a: any): AnimeCard {
   };
 }
 
+async function jikanFetch(path: string): Promise<any | null> {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const res = await fetch(`${JIKAN}${path}`);
+      if (res.ok) return await res.json();
+      if (res.status === 429) {
+        await new Promise((r) => setTimeout(r, 600 * (attempt + 1)));
+        continue;
+      }
+      return null;
+    } catch (e) {
+      console.error("Jikan fetch error", path, e);
+      await new Promise((r) => setTimeout(r, 400));
+    }
+  }
+  return null;
+}
+
 export const searchAnime = createServerFn({ method: "GET" })
   .inputValidator((input: { q: string }) => z.object({ q: z.string().trim().min(1).max(80) }).parse(input))
   .handler(async ({ data }) => {
-    const res = await fetch(`${JIKAN}/anime?q=${encodeURIComponent(data.q)}&limit=24&sfw=true&order_by=popularity`);
-    if (!res.ok) throw new Error("Search failed");
-    const json = await res.json();
-    return { results: (json.data ?? []).map(mapCard) as AnimeCard[] };
+    const json = await jikanFetch(`/anime?q=${encodeURIComponent(data.q)}&limit=24&sfw=true&order_by=popularity`);
+    return { results: ((json?.data ?? []) as any[]).map(mapCard) as AnimeCard[], error: json ? null : "Search temporarily unavailable" };
   });
 
 export const topAnime = createServerFn({ method: "GET" }).handler(async () => {
-  const res = await fetch(`${JIKAN}/top/anime?limit=12&filter=bypopularity`);
-  if (!res.ok) throw new Error("Top failed");
-  const json = await res.json();
-  return { results: (json.data ?? []).map(mapCard) as AnimeCard[] };
+  const json = await jikanFetch(`/top/anime?limit=12&filter=bypopularity`);
+  return { results: ((json?.data ?? []) as any[]).map(mapCard) as AnimeCard[], error: json ? null : "Top anime temporarily unavailable" };
 });
 
 export const seasonalAnime = createServerFn({ method: "GET" }).handler(async () => {
-  const res = await fetch(`${JIKAN}/seasons/now?limit=12&sfw=true`);
-  if (!res.ok) throw new Error("Season failed");
-  const json = await res.json();
-  return { results: (json.data ?? []).map(mapCard) as AnimeCard[] };
+  const json = await jikanFetch(`/seasons/now?limit=12&sfw=true`);
+  return { results: ((json?.data ?? []) as any[]).map(mapCard) as AnimeCard[], error: json ? null : "Seasonal anime temporarily unavailable" };
 });
 
 export const animeById = createServerFn({ method: "GET" })
