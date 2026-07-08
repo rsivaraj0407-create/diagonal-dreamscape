@@ -75,7 +75,7 @@ export const topAnime = createServerFn({ method: "GET" }).handler(async () => {
 });
 
 export const seasonalAnime = createServerFn({ method: "GET" }).handler(async () => {
-  const json = await jikanFetch(`/seasons/now?limit=12&sfw=true`);
+  const json = await jikanFetch(`/seasons/now?limit=12`);
   return { results: ((json?.data ?? []) as any[]).map(mapCard) as AnimeCard[], error: json ? null : "Seasonal anime temporarily unavailable" };
 });
 
