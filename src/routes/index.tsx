@@ -9,14 +9,7 @@ import { SiteHeader } from "@/components/site-header";
 import { AnimeCard } from "@/components/anime-card";
 import { AnimeRow } from "@/components/anime-row";
 import { TrailerModal } from "@/components/trailer-modal";
-import {
-  animeTrailer,
-  searchAnime,
-  seasonalAnime,
-  topAnime,
-  trendingAiring,
-  upcomingAnime,
-} from "@/lib/anime.functions";
+import { animeTrailer, homeFeed, searchAnime } from "@/lib/anime.functions";
 import heroImg from "@/assets/hero-anime.jpg";
 
 export const Route = createFileRoute("/")({
