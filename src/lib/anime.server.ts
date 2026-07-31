@@ -56,22 +56,37 @@ export function mapVideos(d: any): AnimeVideos {
   return { promos: clean(promos).slice(0, 8), music: clean(music).slice(0, 8) };
 }
 
+// The upstream MyAnimeList proxy is intermittently flaky (504s). Keep the last
+// good payload per path so a temporary outage doesn't blank the UI.
+const cache = new Map<string, { at: number; json: any }>();
+const FRESH_MS = 5 * 60 * 1000;
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 export async function jikanFetch(path: string): Promise<any | null> {
-  for (let attempt = 0; attempt < 3; attempt++) {
+  const cached = cache.get(path);
+  if (cached && Date.now() - cached.at < FRESH_MS) return cached.json;
+
+  for (let attempt = 0; attempt < 4; attempt++) {
     try {
-      const res = await fetch(`${JIKAN}${path}`);
-      if (res.ok) return await res.json();
+      const res = await fetch(`${JIKAN}${path}`, { headers: { accept: "application/json" } });
+      if (res.ok) {
+        const json = await res.json();
+        cache.set(path, { at: Date.now(), json });
+        return json;
+      }
       if (res.status === 429 || res.status >= 500) {
-        await new Promise((r) => setTimeout(r, 600 * (attempt + 1)));
+        await sleep(700 * (attempt + 1));
         continue;
       }
       return null;
     } catch (e) {
       console.error("Jikan fetch error", path, e);
-      await new Promise((r) => setTimeout(r, 400));
+      await sleep(500 * (attempt + 1));
     }
   }
-  return null;
+  // Serve stale data rather than nothing.
+  return cached?.json ?? null;
 }
 
 export function dedupe(list: AnimeCard[]): AnimeCard[] {
@@ -79,11 +94,14 @@ export function dedupe(list: AnimeCard[]): AnimeCard[] {
   return list.filter((a) => (seen.has(a.id) ? false : (seen.add(a.id), true)));
 }
 
-export async function jikanList(path: string) {
+export async function jikanList(path: string, limit = 14) {
   const json = await jikanFetch(path);
+  const results = dedupe(((json?.data ?? []) as any[]).map(mapCard))
+    .filter((a) => a.image)
+    .slice(0, limit);
   return {
-    results: dedupe(((json?.data ?? []) as any[]).map(mapCard)),
+    results,
     hasNext: Boolean(json?.pagination?.has_next_page),
-    error: json ? null : "Anime data is temporarily unavailable. Please retry.",
+    error: json ? null : "Anime data is temporarily unavailable. Please retry in a moment.",
   };
 }
