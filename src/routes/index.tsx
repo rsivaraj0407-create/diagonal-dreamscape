@@ -38,17 +38,14 @@ function Home() {
   const search = useServerFn(searchAnime);
   const searchMutation = useMutation({ mutationFn: (query: string) => search({ data: { q: query } }) });
 
-  const topFn = useServerFn(topAnime);
-  const seasonFn = useServerFn(seasonalAnime);
-  const airingFn = useServerFn(trendingAiring);
-  const upcomingFn = useServerFn(upcomingAnime);
+  const feedFn = useServerFn(homeFeed);
   const trailerFn = useServerFn(animeTrailer);
 
-  const stale = { staleTime: 10 * 60 * 1000 };
-  const top = useQuery({ queryKey: ["top"], queryFn: () => topFn(), ...stale });
-  const season = useQuery({ queryKey: ["season"], queryFn: () => seasonFn(), ...stale });
-  const airing = useQuery({ queryKey: ["airing"], queryFn: () => airingFn(), ...stale });
-  const upcoming = useQuery({ queryKey: ["upcoming"], queryFn: () => upcomingFn(), ...stale });
+  const feed = useQuery({ queryKey: ["homeFeed"], queryFn: () => feedFn(), staleTime: 10 * 60 * 1000 });
+  const airing = { data: feed.data?.airing, isLoading: feed.isLoading };
+  const season = { data: feed.data?.season, isLoading: feed.isLoading };
+  const top = { data: feed.data?.top, isLoading: feed.isLoading };
+  const upcoming = { data: feed.data?.upcoming, isLoading: feed.isLoading };
 
   // Rotating hero spotlight from the currently trending titles
   const spotlight = (airing.data?.results ?? []).slice(0, 5);
