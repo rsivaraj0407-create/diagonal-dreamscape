@@ -7,39 +7,39 @@ export const searchAnime = createServerFn({ method: "GET" })
   .inputValidator((input: { q: string }) => z.object({ q: z.string().trim().min(1).max(80) }).parse(input))
   .handler(async ({ data }) => {
     const { jikanList } = await import("./anime.server");
-    return jikanList(`/anime?q=${encodeURIComponent(data.q)}&limit=24&order_by=popularity`);
+    return jikanList(`/anime?q=${encodeURIComponent(data.q)}`, 24);
   });
 
 export const suggestAnime = createServerFn({ method: "GET" })
   .inputValidator((input: { q: string }) => z.object({ q: z.string().trim().min(1).max(80) }).parse(input))
   .handler(async ({ data }) => {
     const { jikanList } = await import("./anime.server");
-    return jikanList(`/anime?q=${encodeURIComponent(data.q)}&limit=8&order_by=members&sort=desc`);
+    return jikanList(`/anime?q=${encodeURIComponent(data.q)}`, 8);
   });
 
 export const topAnime = createServerFn({ method: "GET" }).handler(async () => {
   const { jikanList } = await import("./anime.server");
-  return jikanList(`/top/anime?limit=14&filter=bypopularity`);
+  return jikanList(`/top/anime?filter=bypopularity`);
 });
 
 export const seasonalAnime = createServerFn({ method: "GET" }).handler(async () => {
   const { jikanList } = await import("./anime.server");
-  return jikanList(`/seasons/now?limit=14`);
+  return jikanList(`/seasons/now`);
 });
 
 export const trendingAiring = createServerFn({ method: "GET" }).handler(async () => {
   const { jikanList } = await import("./anime.server");
-  return jikanList(`/top/anime?limit=14&filter=airing`);
+  return jikanList(`/top/anime?filter=airing`);
 });
 
 export const weeklyTopTen = createServerFn({ method: "GET" }).handler(async () => {
   const { jikanList } = await import("./anime.server");
-  return jikanList(`/top/anime?limit=10&filter=airing&type=tv`);
+  return jikanList(`/top/anime?filter=airing&type=tv`, 10);
 });
 
 export const upcomingAnime = createServerFn({ method: "GET" }).handler(async () => {
   const { jikanList } = await import("./anime.server");
-  return jikanList(`/seasons/upcoming?limit=14&sfw=true`);
+  return jikanList(`/seasons/upcoming`);
 });
 
 export const libraryAnime = createServerFn({ method: "GET" })
@@ -119,9 +119,9 @@ export const recommendedFor = createServerFn({ method: "GET" })
 
 export const homeFeed = createServerFn({ method: "GET" }).handler(async () => {
   const { jikanList } = await import("./anime.server");
-  const airing = await jikanList(`/top/anime?limit=14&filter=airing`);
-  const season = await jikanList(`/seasons/now?limit=14`);
-  const top = await jikanList(`/top/anime?limit=14&filter=bypopularity`);
-  const upcoming = await jikanList(`/seasons/upcoming?limit=14&sfw=true`);
+  const airing = await jikanList(`/top/anime?filter=airing`);
+  const season = await jikanList(`/seasons/now`);
+  const top = await jikanList(`/top/anime?filter=bypopularity`);
+  const upcoming = await jikanList(`/seasons/upcoming`);
   return { airing, season, top, upcoming };
 });
