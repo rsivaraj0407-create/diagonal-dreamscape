@@ -1,100 +1,127 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-// Public anime data via Jikan (MyAnimeList). No API key required.
-const JIKAN = "https://api.jikan.moe/v4";
-
-export type AnimeCard = {
-  id: number;
-  title: string;
-  image: string;
-  score: number | null;
-  year: number | null;
-  type: string | null;
-  episodes: number | null;
-};
-
-export type StreamingLink = { name: string; url: string };
-
-export type AnimeDetail = AnimeCard & {
-  synopsis: string | null;
-  status: string | null;
-  genres: string[];
-  studios: string[];
-  trailer: string | null;
-  banner: string | null;
-  streaming: StreamingLink[];
-};
-
-function mapCard(a: any): AnimeCard {
-  return {
-    id: a.mal_id,
-    title: a.title_english || a.title,
-    image: a.images?.webp?.large_image_url || a.images?.jpg?.large_image_url || a.images?.jpg?.image_url,
-    score: a.score ?? null,
-    year: a.year ?? (a.aired?.prop?.from?.year ?? null),
-    type: a.type ?? null,
-    episodes: a.episodes ?? null,
-  };
-}
-
-async function jikanFetch(path: string): Promise<any | null> {
-  for (let attempt = 0; attempt < 3; attempt++) {
-    try {
-      const res = await fetch(`${JIKAN}${path}`);
-      if (res.ok) return await res.json();
-      if (res.status === 429) {
-        await new Promise((r) => setTimeout(r, 600 * (attempt + 1)));
-        continue;
-      }
-      return null;
-    } catch (e) {
-      console.error("Jikan fetch error", path, e);
-      await new Promise((r) => setTimeout(r, 400));
-    }
-  }
-  return null;
-}
+export type { AnimeCard, AnimeDetail, AnimeVideo, AnimeVideos, StreamingLink } from "./anime-types";
 
 export const searchAnime = createServerFn({ method: "GET" })
   .inputValidator((input: { q: string }) => z.object({ q: z.string().trim().min(1).max(80) }).parse(input))
   .handler(async ({ data }) => {
-    const json = await jikanFetch(`/anime?q=${encodeURIComponent(data.q)}&limit=24&order_by=popularity`);
-    const seen = new Set<number>();
-    const results = ((json?.data ?? []) as any[])
-      .map(mapCard)
-      .filter((a) => (seen.has(a.id) ? false : (seen.add(a.id), true))) as AnimeCard[];
-    return { results, error: json ? null : "Search temporarily unavailable" };
+    const { jikanList } = await import("./anime.server");
+    return jikanList(`/anime?q=${encodeURIComponent(data.q)}`, 24);
   });
 
-
+export const suggestAnime = createServerFn({ method: "GET" })
+  .inputValidator((input: { q: string }) => z.object({ q: z.string().trim().min(1).max(80) }).parse(input))
+  .handler(async ({ data }) => {
+    const { jikanList } = await import("./anime.server");
+    return jikanList(`/anime?q=${encodeURIComponent(data.q)}`, 8);
+  });
 
 export const topAnime = createServerFn({ method: "GET" }).handler(async () => {
-  const json = await jikanFetch(`/top/anime?limit=12&filter=bypopularity`);
-  return { results: ((json?.data ?? []) as any[]).map(mapCard) as AnimeCard[], error: json ? null : "Top anime temporarily unavailable" };
+  const { jikanList } = await import("./anime.server");
+  return jikanList(`/top/anime?filter=bypopularity`);
 });
 
 export const seasonalAnime = createServerFn({ method: "GET" }).handler(async () => {
-  const json = await jikanFetch(`/seasons/now?limit=12`);
-  return { results: ((json?.data ?? []) as any[]).map(mapCard) as AnimeCard[], error: json ? null : "Seasonal anime temporarily unavailable" };
+  const { jikanList } = await import("./anime.server");
+  return jikanList(`/seasons/now`);
+});
+
+export const trendingAiring = createServerFn({ method: "GET" }).handler(async () => {
+  const { jikanList } = await import("./anime.server");
+  return jikanList(`/top/anime?filter=airing`);
+});
+
+export const weeklyTopTen = createServerFn({ method: "GET" }).handler(async () => {
+  const { jikanList } = await import("./anime.server");
+  return jikanList(`/top/anime?filter=airing&type=tv`, 10);
+});
+
+export const upcomingAnime = createServerFn({ method: "GET" }).handler(async () => {
+  const { jikanList } = await import("./anime.server");
+  return jikanList(`/seasons/upcoming`);
+});
+
+export const libraryAnime = createServerFn({ method: "GET" })
+  .inputValidator(
+    (input: { page?: number; genre?: string; status?: string; sort?: string; q?: string }) =>
+      z
+        .object({
+          page: z.coerce.number().int().min(1).max(50).default(1),
+          genre: z.string().max(10).optional(),
+          status: z.enum(["airing", "complete", "upcoming"]).optional(),
+          sort: z.enum(["popularity", "score", "start_date"]).default("popularity"),
+          q: z.string().trim().max(80).optional(),
+        })
+        .parse(input ?? {}),
+  )
+  .handler(async ({ data }) => {
+    const { jikanList } = await import("./anime.server");
+    const params = new URLSearchParams({
+      limit: "24",
+      page: String(data.page),
+      order_by: data.sort,
+      sort: data.sort === "popularity" ? "asc" : "desc",
+    });
+    if (data.genre) params.set("genres", data.genre);
+    if (data.status) params.set("status", data.status);
+    if (data.q) params.set("q", data.q);
+    return jikanList(`/anime?${params.toString()}`);
+  });
+
+export const animeGenres = createServerFn({ method: "GET" }).handler(async () => {
+  const { jikanFetch } = await import("./anime.server");
+  const json = await jikanFetch(`/genres/anime?filter=genres`);
+  const genres = ((json?.data ?? []) as any[])
+    .filter((g) => g.count > 200)
+    .map((g) => ({ id: String(g.mal_id), name: g.name as string }))
+    .slice(0, 28);
+  return { genres };
 });
 
 export const animeById = createServerFn({ method: "GET" })
   .inputValidator((input: { id: number }) => z.object({ id: z.coerce.number().int().positive() }).parse(input))
   .handler(async ({ data }) => {
-    const res = await fetch(`${JIKAN}/anime/${data.id}/full`);
-    if (!res.ok) throw new Error("Anime not found");
-    const json = await res.json();
-    const a = json.data;
-    const detail: AnimeDetail = {
-      ...mapCard(a),
-      synopsis: a.synopsis ?? null,
-      status: a.status ?? null,
-      genres: (a.genres ?? []).map((g: any) => g.name),
-      studios: (a.studios ?? []).map((s: any) => s.name),
-      trailer: a.trailer?.embed_url ?? null,
-      banner: a.images?.webp?.large_image_url || null,
-      streaming: (a.streaming ?? []).map((s: any) => ({ name: s.name, url: s.url })),
-    };
-    return detail;
+    const { jikanFetch, mapDetail } = await import("./anime.server");
+    const json = await jikanFetch(`/anime/${data.id}/full`);
+    if (!json?.data) throw new Error("Anime not found");
+    return mapDetail(json.data);
   });
+
+export const animeVideos = createServerFn({ method: "GET" })
+  .inputValidator((input: { id: number }) => z.object({ id: z.coerce.number().int().positive() }).parse(input))
+  .handler(async ({ data }) => {
+    const { jikanFetch, mapVideos } = await import("./anime.server");
+    const json = await jikanFetch(`/anime/${data.id}/videos`);
+    return mapVideos(json?.data);
+  });
+
+export const animeTrailer = createServerFn({ method: "GET" })
+  .inputValidator((input: { id: number }) => z.object({ id: z.coerce.number().int().positive() }).parse(input))
+  .handler(async ({ data }) => {
+    const { jikanFetch } = await import("./anime.server");
+    const json = await jikanFetch(`/anime/${data.id}`);
+    const a = json?.data;
+    return {
+      title: (a?.title_english || a?.title || "Trailer") as string,
+      embedUrl: (a?.trailer?.embed_url ?? null) as string | null,
+    };
+  });
+
+export const recommendedFor = createServerFn({ method: "GET" })
+  .inputValidator((input: { id: number }) => z.object({ id: z.coerce.number().int().positive() }).parse(input))
+  .handler(async ({ data }) => {
+    const { jikanFetch, mapCard, dedupe } = await import("./anime.server");
+    const json = await jikanFetch(`/anime/${data.id}/recommendations`);
+    const entries = ((json?.data ?? []) as any[]).slice(0, 12).map((r) => r.entry);
+    return { results: dedupe(entries.map(mapCard)) };
+  });
+
+export const homeFeed = createServerFn({ method: "GET" }).handler(async () => {
+  const { jikanList } = await import("./anime.server");
+  const airing = await jikanList(`/top/anime?filter=airing`);
+  const season = await jikanList(`/seasons/now`);
+  const top = await jikanList(`/top/anime?filter=bypopularity`);
+  const upcoming = await jikanList(`/seasons/upcoming`);
+  return { airing, season, top, upcoming };
+});
