@@ -116,3 +116,12 @@ export const recommendedFor = createServerFn({ method: "GET" })
     const entries = ((json?.data ?? []) as any[]).slice(0, 12).map((r) => r.entry);
     return { results: dedupe(entries.map(mapCard)) };
   });
+
+export const homeFeed = createServerFn({ method: "GET" }).handler(async () => {
+  const { jikanList } = await import("./anime.server");
+  const airing = await jikanList(`/top/anime?limit=14&filter=airing`);
+  const season = await jikanList(`/seasons/now?limit=14`);
+  const top = await jikanList(`/top/anime?limit=14&filter=bypopularity`);
+  const upcoming = await jikanList(`/seasons/upcoming?limit=14&sfw=true`);
+  return { airing, season, top, upcoming };
+});
